@@ -13,12 +13,14 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.GridPane;
+import javafx.scene.text.Text;
 
 public class MainController {
   @FXML Button resetButton;
   @FXML Button prevButton;
   @FXML Button nextButton;
   @FXML GridPane field;
+  @FXML Text goalText;
 
   ImageView[] resetImgs = new ImageView[3];
   ImageView[] prevImgs = new ImageView[3];
@@ -42,11 +44,11 @@ public class MainController {
   // 0b0110 (6): (not in use)
   // 0b0111 (7): (not in use)
   // 0b1000 (8): wall
-  private final int EMPTY  = 0b0000;
-  private final int DEST   = 0b0001;
-  private final int PLAYER = 0b0010;
-  private final int CRATE  = 0b0100;
-  private final int WALL   = 0b1000;
+  final int EMPTY  = 0b0000;
+  final int DEST   = 0b0001;
+  final int PLAYER = 0b0010;
+  final int CRATE  = 0b0100;
+  final int WALL   = 0b1000;
 
   enum Direction {
     UP,
@@ -76,6 +78,7 @@ public class MainController {
     tiles[3] = new Image("data/tile/wall.png");
     tiles[4] = new Image("data/tile/crate_on_dest.png");
     tiles[5] = new Image("data/tile/error.png");
+    goalText.setText("Congratulations!\n<= Click here to proceed to the next stage.");
     configureButton(resetButton, resetImgs, () -> {
       loadMap(currentMap);
     });
@@ -85,12 +88,23 @@ public class MainController {
     loadMap(1);
   }
 
-  private boolean mapExists(int n) {
+  boolean hasReachedGoal() {
+    for (int[] a : map) {
+      for (int n : a) {
+        if((n & CRATE) != 0 && (n & DEST) == 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  boolean mapExists(int n) {
     Path p = Paths.get("data/map/"+n+".map");
     return Files.exists(p);
   }
 
-  private void loadMap(int n) {
+  void loadMap(int n) {
     // assume the map exists
     Path p = Paths.get("data/map/"+n+".map");
 
@@ -130,10 +144,12 @@ player_search:
       disableButton(nextButton, nextImgs);
     }
 
+    resetButton.setGraphic(resetImgs[2]);
+
     draw();
   }
 
-  private void draw() {
+  void draw() {
     field.getChildren().clear();
     for (int x = 0; x < map[0].length; x++) {
       for (int y = 0; y < map.length; y++) {
@@ -180,7 +196,7 @@ player_search:
     }
   }
 
-  private void handleKey(KeyEvent k) {
+  void handleKey(KeyEvent k) {
     boolean changed = false;
     Direction newDir = playerDir;
     switch (k.getCode()) {
@@ -206,35 +222,67 @@ player_search:
       playerDir = newDir;
       draw();
     }
+
+    if (hasReachedGoal()) {
+      goalText.setVisible(true);
+      resetButton.getScene().setOnKeyPressed(null);
+    }
   }
 
-  private boolean tryMove(int dx, int dy) {
-    boolean changed = false;
+  boolean tryMove(int dx, int dy) {
     final int newX = playerX + dx;
     final int newY = playerY + dy;
-    if (0 <= newX && newX < map[0].length && 0 <= newY && newY < map.length && map[newY][newX] != WALL) {
-          map[playerY][playerX] &= ~PLAYER;
-          map[newY][newX] |= PLAYER;
-          playerX = newX;
-          playerY = newY;
-          return true;
+    if (
+      0 <= newX && newX < map[0].length
+      && 0 <= newY && newY < map.length
+      && map[newY][newX] != WALL
+    ) {
+      if (
+        (map[newY][newX] & CRATE) != 0
+        && !tryMoveCrate(newX, newY, dx, dy)
+      ) {
+        return false;
+      }
+      map[playerY][playerX] &= ~PLAYER;
+      map[newY][newX] |= PLAYER;
+      playerX = newX;
+      playerY = newY;
+      return true;
     }
     return false;
   }
 
-  private void enablePrevButton() {
+  boolean tryMoveCrate(int x, int y, int dx, int dy) {
+    final int newX = x + dx;
+    final int newY = y + dy;
+    if (
+      0 <= newX && newX < map[0].length
+      && 0 <= newY && newY < map.length
+      && map[newY][newX] != WALL
+      && (map[newY][newX] & CRATE) == 0
+    ) {
+      map[y][x] &= ~CRATE;
+      map[newY][newX] |= CRATE;
+      return true;
+    }
+    return false;
+  }
+
+  void enablePrevButton() {
     configureButton(prevButton, prevImgs, () -> {
       loadMap(currentMap-1);
     });
   }
 
-  private void enableNextButton() {
+  void enableNextButton() {
     configureButton(nextButton, nextImgs, () -> {
+      goalText.setVisible(false);
+      resetButton.getScene().setOnKeyPressed(this::handleKey);
       loadMap(currentMap+1);
     });
   }
 
-  private void configureButton(Button b, ImageView[] imgs, Runnable r) {
+  void configureButton(Button b, ImageView[] imgs, Runnable r) {
     b.setGraphic(imgs[2]);
     b.setOnMousePressed((m) -> {
       if(m.getButton() == MouseButton.PRIMARY) {
@@ -243,12 +291,14 @@ player_search:
     });
     b.setOnMouseReleased( (MouseEvent m) -> {
       if(m.getButton() == MouseButton.PRIMARY) {
+        goalText.setVisible(false);
+        resetButton.getScene().setOnKeyPressed(this::handleKey);
         r.run();
       }
     });
   }
 
-  private void disableButton(Button b, ImageView[] imgs) {
+  void disableButton(Button b, ImageView[] imgs) {
     b.setGraphic(imgs[0]);
     b.setOnMousePressed(null);
     b.setOnMouseReleased(null);
