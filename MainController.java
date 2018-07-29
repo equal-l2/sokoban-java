@@ -15,9 +15,9 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.GridPane;
 
 public class MainController {
-  @FXML Button resetBtn;
-  @FXML Button prevBtn;
-  @FXML Button nextBtn;
+  @FXML Button resetButton;
+  @FXML Button prevButton;
+  @FXML Button nextButton;
   @FXML GridPane field;
 
   ImageView[] resetImgs = new ImageView[3];
@@ -29,8 +29,8 @@ public class MainController {
   int[][] map;
   int playerX;
   int playerY;
+  int currentMap;
   Direction playerDir;
-
 
   // stage objects are described as bit flags.
   // 0b0000 (0): empty
@@ -76,26 +76,33 @@ public class MainController {
     tiles[3] = new Image("data/tile/wall.png");
     tiles[4] = new Image("data/tile/crate_on_dest.png");
     tiles[5] = new Image("data/tile/error.png");
-    configureBtn(resetBtn, resetImgs);
-    configureBtn(prevBtn, prevImgs);
-    configureBtn(nextBtn, nextImgs);
-    Platform.runLater(() -> {
-      resetBtn.getScene().setOnKeyPressed(this::handleKey);
+    configureButton(resetButton, resetImgs, () -> {
+      loadMap(currentMap);
     });
+    Platform.runLater(() -> {
+      resetButton.getScene().setOnKeyPressed(this::handleKey);
+    });
+    loadMap(1);
+  }
+
+  private boolean mapExists(int n) {
+    Path p = Paths.get("data/map/"+n+".map");
+    return Files.exists(p);
+  }
+
+  private void loadMap(int n) {
+    // assume the map exists
+    Path p = Paths.get("data/map/"+n+".map");
+
     try {
-      loadMap(1);
+      int[][] new_map = Files.lines(p).map( (s) ->
+          s.chars().map(Character::getNumericValue).toArray()
+          ).toArray(int[][]::new);
+      map = new_map;
     } catch (IOException e) {
       e.printStackTrace();
       Platform.exit();
     }
-  }
-
-  private void loadMap(int n) throws IOException {
-    Path p = Paths.get("data/map/"+n+".map");
-    int[][] new_map = Files.lines(p).map( (s) ->
-        s.chars().map(Character::getNumericValue).toArray()
-        ).toArray(int[][]::new);
-    map = new_map;
 
 player_search:
     for (int x = 0; x < map[0].length; x++) {
@@ -108,14 +115,26 @@ player_search:
       }
     }
 
+    currentMap = n;
     playerDir = Direction.UP;
+
+    if (mapExists(currentMap-1)) {
+      enablePrevButton();
+    } else {
+      disableButton(prevButton, prevImgs);
+    }
+
+    if (mapExists(currentMap+1)) {
+      enableNextButton();
+    } else {
+      disableButton(nextButton, nextImgs);
+    }
 
     draw();
   }
 
   private void draw() {
-    field.getChildren().removeAll();
-    field.setMinSize(0, 0);
+    field.getChildren().clear();
     for (int x = 0; x < map[0].length; x++) {
       for (int y = 0; y < map.length; y++) {
         int val = map[y][x];
@@ -203,7 +222,19 @@ player_search:
     return false;
   }
 
-  private void configureBtn(Button b, ImageView[] imgs) {
+  private void enablePrevButton() {
+    configureButton(prevButton, prevImgs, () -> {
+      loadMap(currentMap-1);
+    });
+  }
+
+  private void enableNextButton() {
+    configureButton(nextButton, nextImgs, () -> {
+      loadMap(currentMap+1);
+    });
+  }
+
+  private void configureButton(Button b, ImageView[] imgs, Runnable r) {
     b.setGraphic(imgs[2]);
     b.setOnMousePressed((m) -> {
       if(m.getButton() == MouseButton.PRIMARY) {
@@ -212,12 +243,12 @@ player_search:
     });
     b.setOnMouseReleased( (MouseEvent m) -> {
       if(m.getButton() == MouseButton.PRIMARY) {
-        b.setGraphic(imgs[2]);
+        r.run();
       }
     });
   }
 
-  private void disableBtn(Button b, ImageView[] imgs) {
+  private void disableButton(Button b, ImageView[] imgs) {
     b.setGraphic(imgs[0]);
     b.setOnMousePressed(null);
     b.setOnMouseReleased(null);
