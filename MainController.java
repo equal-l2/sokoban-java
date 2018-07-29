@@ -1,18 +1,18 @@
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.stream.Collectors;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
-import javafx.scene.image.ImageView;
 import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.input.KeyEvent;
-import javafx.scene.input.KeyCode;
 import javafx.scene.layout.GridPane;
-import javafx.application.Platform;
-import java.nio.file.Paths;
-import java.nio.file.Path;
-import java.nio.file.Files;
-import java.util.stream.Collectors;
-import java.io.IOException;
 
 public class MainController {
   @FXML Button resetBtn;
@@ -50,8 +50,8 @@ public class MainController {
 
   enum Direction {
     UP,
-    DOWN,
     RIGHT,
+    DOWN,
     LEFT
   }
 
@@ -93,8 +93,8 @@ public class MainController {
   private void loadMap(int n) throws IOException {
     Path p = Paths.get("data/map/"+n+".map");
     int[][] new_map = Files.lines(p).map( (s) ->
-      s.chars().map(Character::getNumericValue).toArray()
-    ).toArray(int[][]::new);
+        s.chars().map(Character::getNumericValue).toArray()
+        ).toArray(int[][]::new);
     map = new_map;
 
 player_search:
@@ -125,10 +125,10 @@ player_search:
             case UP:
               img = playerImgs[0];
               break;
-            case DOWN:
+            case RIGHT:
               img = playerImgs[1];
               break;
-            case RIGHT:
+            case DOWN:
               img = playerImgs[2];
               break;
             case LEFT:
@@ -162,23 +162,45 @@ player_search:
   }
 
   private void handleKey(KeyEvent k) {
+    boolean changed = false;
+    Direction newDir = playerDir;
     switch (k.getCode()) {
-      case UP :
-        tryMove(Direction.UP);
+      case UP:
+        newDir = Direction.UP;
+        changed = tryMove(0, -1);
+        break;
+      case RIGHT:
+        newDir = Direction.RIGHT;
+        changed = tryMove(1, 0);
         break;
       case DOWN:
-        tryMove(Direction.DOWN);
+        newDir = Direction.DOWN;
+        changed = tryMove(0, 1);
         break;
-      case RIGHT :
-        tryMove(Direction.RIGHT);
+      case LEFT:
+        newDir = Direction.LEFT;
+        changed = tryMove(-1, 0);
         break;
-      case LEFT :
-        tryMove(Direction.LEFT);
-        break;
+    }
+
+    if (newDir != playerDir || changed) {
+      playerDir = newDir;
+      draw();
     }
   }
 
-  private void tryMove(Direction d) {
+  private boolean tryMove(int dx, int dy) {
+    boolean changed = false;
+    final int newX = playerX + dx;
+    final int newY = playerY + dy;
+    if (0 <= newX && newX < map[0].length && 0 <= newY && newY < map.length && map[newY][newX] != WALL) {
+          map[playerY][playerX] &= ~PLAYER;
+          map[newY][newX] |= PLAYER;
+          playerX = newX;
+          playerY = newY;
+          return true;
+    }
+    return false;
   }
 
   private void configureBtn(Button b, ImageView[] imgs) {
@@ -193,5 +215,11 @@ player_search:
         b.setGraphic(imgs[2]);
       }
     });
+  }
+
+  private void disableBtn(Button b, ImageView[] imgs) {
+    b.setGraphic(imgs[0]);
+    b.setOnMousePressed(null);
+    b.setOnMouseReleased(null);
   }
 }
